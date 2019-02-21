@@ -1,0 +1,235 @@
+task checkoutBranch << {
+    description 'Checkout task (Supports parameter "branch", represents branch to checkout. Example: gradle [checkoutBranch | co] -Pbranch=3.23.1'
+    fetch()
+    if (project.hasProperty('branch') && branch != null) {
+        checkout("release-" + branch)
+    }
+}
+
+task co << {
+    description 'Alias for checkoutBranch'
+    tasks.checkoutBranch.execute()
+}
+
+task checkoutNext << {
+    fetch()
+    checkout(getNextBranchName(getCurrentBranchName()))
+}
+
+task integrate << {
+    description 'Integrate task (Supports parameter "start", represents integrate starting branch. Example: gradle [integrate | gitall] -Pstart=3.23.1)(Supports parameter "release", represents release version integrate, merges using ours parameter. Example: gradle [integrate | gitall] -Prelease)'
+    println "GIT pull, merge and push all"
+
+    fetch()
+
+    if (project.hasProperty('start') && start != null) {
+        checkout("release-" + start)
+    }
+
+    pull()
+    def currentBranchName = getCurrentBranchName()
+    def firstBranchName = getCurrentBranchName()
+    while (getNextBranchName(currentBranchName) != null) {
+        def prevBranchName = currentBranchName
+        currentBranchName = getNextBranchName(currentBranchName)
+        checkout(currentBranchName)
+        pull()
+        merge(prevBranchName)
+    }
+    pushStartingAt(firstBranchName)
+    checkout(firstBranchName)
+}
+
+task integrateOneUp << {
+    description 'Integrate task. Example: gradle [integrateOneUp | gitup]'
+    println "GIT pull, merge and push one up"
+    fetch()
+    pull()
+    def currentBranchName = getCurrentBranchName()
+    def firstBranchName = getCurrentBranchName()
+    if (getNextBranchName(currentBranchName) != null) {
+        def prevBranchName = currentBranchName
+        currentBranchName = getNextBranchName(currentBranchName)
+        println currentBranchName
+        checkout(currentBranchName)
+        pull()
+        merge(prevBranchName)
+        pushBranch(prevBranchName)
+        pushBranch(currentBranchName)
+        checkout(firstBranchName)
+    }
+}
+
+task gitall << {
+    description 'Alias for integrate'
+    tasks.integrate.execute()
+}
+
+task gitup << {
+    description 'Alias for integrateOneUp'
+    tasks.integrateOneUp.execute()
+}
+
+task upPatch << {
+  def currentBranchName = getCurrentBranchName()
+  def nextBranchName = getNextPatchVersion(currentBranchName)
+  if (branchExist(nextBranchName)) {
+    throw new GradleException('next patch branch ' + nextBranchName + ' already exits')
+  }
+  createBranch(nextBranchName)
+}
+
+task upMinor << {
+  def currentBranchName = getCurrentBranchName()
+  def nextBranchName = getNextMinorVersion(currentBranchName)
+  if (branchExist(nextBranchName)) {
+    throw new GradleException('next minor branch ' + nextBranchName + ' already exits')
+  }
+  createBranch(nextBranchName)
+}
+
+def createBranch(nextBranchName) {
+  exec {
+    executable = "git"
+    args = ["branch", nextBranchName]
+  }
+
+  exec {
+    executable = "git"
+    args = ["checkout", nextBranchName]
+  }
+
+  exec {
+    executable = "git"
+    args = ["checkout", nextBranchName]
+  }
+}
+
+def static getNextBranchName(currentBranchName) {
+    def nextBranchName = getNextPatchVersion(currentBranchName)
+    if (branchExist(nextBranchName)) {
+        return nextBranchName
+    }
+    nextBranchName = getNextMinorVersion(currentBranchName)
+    if (branchExist(nextBranchName)) {
+        return nextBranchName
+    }
+    nextBranchName = getNextMajorVersion(currentBranchName)
+    if (branchExist(nextBranchName)) {
+        return nextBranchName
+    }
+    return null
+}
+
+def static branchExist(branchName) {
+    return "git branch -a".execute().text.trim().contains(branchName)
+}
+
+def static getNextMajorVersion(branchName) {
+    def (major) = branchName.replace('release-', '').tokenize(".")
+    def majorInt = major as Integer
+    if (majorInt == null) {
+        throw new GradleException("Major version part must be integer!")
+    }
+    return 'release-' + (majorInt + 1) + ".0.0"
+}
+
+def static getNextMinorVersion(branchName) {
+    def (major, minor) = branchName.replace('release-', '').tokenize(".")
+    def minorInt = minor as Integer
+    if (minorInt == null) {
+        throw new GradleException("Minor version part must be integer!")
+    }
+    return 'release-' + major + "." + (minorInt + 1) + ".0"
+}
+
+def static getNextPatchVersion(branchName) {
+    def (major, minor, patch) = branchName.replace('release-', '').tokenize(".")
+    def majorInt = major as Integer
+    def minorInt = minor as Integer
+    def patchInt = patch as Integer
+    if (majorInt == null || minorInt == null || patchInt == null) {
+        throw new GradleException("CurrentBranch version " + majorInt + "." + minorInt + "." + patchInt + " is not valid! Version parts must be integers!")
+    }
+    return 'release-' + major + "." + minor + "." + (patchInt + 1)
+}
+
+def static getCurrentBranchName() {
+    return "git rev-parse --abbrev-ref HEAD".execute().text.trim()
+}
+
+def checkout(branchName) {
+    println "Checking out branch " + branchName
+    exec {
+        executable = "git"
+        args = ["checkout", branchName]
+    }
+}
+
+def fetch() {
+    println "Fetching from origin"
+    exec {
+        executable = "git"
+        args = ["fetch", "origin"]
+    }
+}
+
+def pull() {
+    println "Pulling updates"
+    exec {
+        executable = "git"
+        args = ["pull"]
+    }
+}
+
+def merge() {
+    println "Merging with pulled updates"
+    exec {
+        executable = "git"
+        args = ["merge"]
+    }
+}
+
+def merge(branchName) {
+    println "Merging with branch " + branchName
+    if (project.hasProperty('release')) {
+        exec {
+            executable = "git"
+            args = ["merge", "-s", "ours", branchName]
+        }
+    }
+    else {
+        exec {
+            executable = "git"
+            args = ["merge", branchName]
+        }
+    }
+}
+
+def pushAll() {
+    println "Pushing all branches to origin"
+    exec {
+        executable = "git"
+        args = ["push", "origin"]
+    }
+}
+
+def pushStartingAt(branchName) {
+    println "Pushing branches starting from " + branchName + " to origin"
+    checkout(branchName)
+    def currentBranchName = getCurrentBranchName()
+    pushBranch(currentBranchName)
+    while (getNextBranchName(currentBranchName) != null) {
+        currentBranchName = getNextBranchName(currentBranchName)
+        checkout(currentBranchName)
+        pushBranch(currentBranchName)
+    }
+}
+
+def pushBranch(branchName) {
+    println "Pushing " + branchName + " to origin"
+    exec {
+        executable = "git"
+        args = ["push", "origin", branchName]
+    }
+}

@@ -1,0 +1,127 @@
+configurations {
+  jaxb
+}
+
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'org.springframework.boot'
+apply plugin: 'io.spring.dependency-management'
+apply plugin: 'war'
+apply from: 'sfos.gradle'
+apply from: 'git.gradle'
+
+buildscript {
+  repositories {
+    maven { url 'http://repo.rmv/nexus/repository/maven-public' }
+    maven { url 'http://repo.rmv/archiva/repository/internal' }
+  }
+  dependencies {
+    classpath ("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+    classpath ("org.postgresql:postgresql:${postgresVersion}")
+    classpath ("wsdl4j:wsdl4j:${wsdl4jVersion}")
+  }
+}
+
+compileJava { options.encoding = "UTF-8" }
+
+group = 'ee.fin.sfos'
+version = getReleaseVersion()
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+  maven { url 'http://repo.rmv/archiva/repository/internal' }
+  maven { url 'http://repo.rmv/nexus/repository/maven-public' }
+}
+
+configurations {
+  providedRuntime
+}
+
+bootWar {
+  archiveName 'sfos-ext-svcs.war'
+}
+
+task testUnit(type: Test) {
+  useJUnit {
+    includeCategories 'ee.fin.sfos.test.UnitTest'
+    excludeCategories 'ee.fin.sfos.test.IntegrationTest'
+  }
+}
+
+task testIntegration(type: Test) {
+  useJUnit {
+    includeCategories 'ee.fin.sfos.test.IntegrationTest'
+    excludeCategories 'ee.fin.sfos.test.UnitTest'
+  }
+}
+
+task wsdl2Java {
+  def schemaPackage = 'ee.fin.sfos.externalservices.schema'
+  def schemaDir = 'src/main/resources/schema'
+  def targetDir = 'src/main/java'
+
+  FileTree filesTree = fileTree(dir: "$schemaDir")
+  filesTree.include '*.wsdl'
+
+  doLast {
+    filesTree.getFiles().each {
+      File file ->
+        def packageExt = file.name
+        packageExt = packageExt.take(packageExt.lastIndexOf("."))
+        String schemaFileName = file.getAbsolutePath()
+        exec {
+          executable = "xjc"
+          args = ["-wsdl", "-XautoNameResolution", "-d", "$targetDir", "-p",
+                  "$schemaPackage.$packageExt", "$schemaFileName"]
+        }
+    }
+  }
+}
+
+test.enabled = false
+
+dependencies {
+  compile ("org.springframework.boot:spring-boot-starter-actuator")
+  compile ("org.springframework.boot:spring-boot-starter-data-jpa")
+  compile ("org.springframework.boot:spring-boot-starter-mail")
+  compile ("org.springframework.boot:spring-boot-starter-web")
+  compile ("org.springframework.boot:spring-boot-starter-web-services")
+  compile ("org.springframework.boot:spring-boot-starter-security")
+
+  compile ("com.nortal.jroad:xtee-common:${jroadVersion}") { transitive = false }
+  compile ("com.nortal.jroad:xtee-client-transport:${jroadVersion}") { transitive = false }
+  compile ("com.nortal.jroad:xtee-client-ariregv6:${jroadVersion}") { transitive = false }
+  compile ("com.nortal.jroad:xtee-client-pria-crosscheck-sfos:${jroadVersion}") { transitive = false }
+  compile ("com.nortal.jroad:xtee-client-rrv6:${jroadVersion}") { transitive = false }
+  compile ("com.nortal.jroad:xtee-client-kik-crosscheck-sfos:${jroadVersion}") { transitive = false }
+  compile ("com.nortal.jroad:xtee-client-emtav6:${jroadVersion}") { transitive = false }
+  compile ("com.nortal.jroad:xtee-server:${jroadVersion}") { transitive = false }
+  compile ("com.nortal.jroad:xtee-client-atv6:${jroadVersion}") { transitive = false }
+  compile ("com.nortal.jroad:xtee-client-etoimikv6:${jroadVersion}") { transitive = false }
+
+  compile ("commons-lang:commons-lang:${oldCommonsLang}")
+  compile ("org.springframework.ws:spring-oxm:1.5.10")
+  compile ("org.apache.xmlbeans:xmlbeans:${xmlbeansVersion}")
+  compile ("org.apache.httpcomponents:httpclient:4.5.6")
+  compile ("org.apache.commons:commons-lang3:${commonsLangVersion}")
+  compile ("com.google.guava:guava:${guavaVersion}")
+  compile ("io.springfox:springfox-swagger-ui:${swagger2Version}")
+  compile ("io.springfox:springfox-swagger2:${swagger2Version}")
+  compile ("ee.fin.sfos:sfos-common:${sfosCommonVersion}")
+  compile ("com.vladmihalcea:hibernate-types-52:${hibernateTypes}")
+  compile ("org.slf4j:log4j-over-slf4j:${log4jOverSlf4jVersion}")
+
+  compile ("org.postgresql:postgresql:$postgresVersion")
+  compile ("wsdl4j:wsdl4j:${wsdl4jVersion}")
+
+  jaxb ("org.glassfish.jaxb:jaxb-xjc:${jaxbXjcVersion}")
+
+  compileOnly ("org.projectlombok:lombok:${lombokVersion}")
+  compileOnly ("org.springframework.boot:spring-boot-configuration-processor")
+
+  providedRuntime ("org.springframework.boot:spring-boot-starter-tomcat")
+
+  testCompile ("org.springframework.boot:spring-boot-starter-test")
+  testCompile ("io.rest-assured:rest-assured:${restAssuredVersion}")
+}

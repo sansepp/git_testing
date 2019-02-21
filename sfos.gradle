@@ -1,0 +1,7 @@
+ext.getReleaseVersion = { ->
+  def releaseProperties = new Properties()
+  file("src/main/resources/sfos_release.properties").withInputStream {
+    stream -> releaseProperties.load(stream)
+  }
+  return releaseProperties.get("release.version")
+}
