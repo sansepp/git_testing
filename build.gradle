@@ -1,5 +1,3 @@
-apply plugin: 'io.spring.dependency-management'
-apply plugin: 'war'
 apply from: 'sfos.gradle'
 apply from: 'git.gradle'
 
@@ -10,25 +8,10 @@ buildscript {
   }
 }
 
-compileJava { options.encoding = "UTF-8" }
-
 group = 'ee.fin.sfos'
 version = getReleaseVersion()
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
 
 repositories {
   maven { url 'http://repo.rmv/archiva/repository/internal' }
   maven { url 'http://repo.rmv/nexus/repository/maven-public' }
-}
-
-configurations {
-  providedRuntime
-}
-
-
-test.enabled = false
-
-dependencies {
-
 }
